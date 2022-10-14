@@ -47,27 +47,35 @@
                                         <li><a target="_blank" href="https://github.com/palasmi/Weighting-survey-data-generalized-raking" class="icon brands fa-github"><span class="label">Github</span></a></li>
                                     </ul>
                                 </header>
-                                <p>Very often we need to weight a survey data to make them representative of population. 
-                                Typically we try to match distributions of different characteristics observed in a population, such as age, gender, level of education, or income.
-                                <i>Iterative Proportional Fitting</i> is often used to generate the weights. This method has, however, a drawback - it often
-                                generates very unbalanced weights (meaning that some observations get very low and some very high weights). This problem is discussed
-                                for example in <a target="_blank" href="https://dev.to/potloc/generalized-raking-for-survey-weighting-2d1d">this great article</a>.</p>
-                                <p>The article suggests using a <i>Generalized Raking</i> algorithm that generates weights that are as close to 1 as possible. The trick is in 
-                                utilizing a constrained optimization where we try to minimize a function of weights that has minimum in 1 while satisfying constraints that 
-                                the weighted data have to match the target distributions. The mentioned article proposed a python implementation of this method as well. However
-                                their approach might be very restrictive. Let me explain why: they use cross-dimensional weighting, which means that it would not be enough to define 
-                                for example the distribution of levels of education and the distribution of age groups, but one would need to define frequency of all combinations of 
-                                age and education. </p>
-                                <span class="image fit">
-                                    <img src="images/scale.jpg" alt="">
-                                </span>
-                                <p>Adding more characteristics, such as gender or region would mean a need of extremely detailed information (basically frequencies
-                                for all the combinations of these four characteristics) that is often not known or at least hard to gather. Another problem arises, if we have no person
-                                representing some of the combinations of characteristics (which is very likely to happen when combining multiple characteristics). 
-                                In such case, the proposed algorithm does not work. In fact, for most of the projects with survey data, I have been using a weighting without crossing the characteristics - 
-                                matching the distributions of main characteristics, such that in the end we have same distributions of men and women or people with university degree as
-                                in population without caring about matching the weight of 79 years old women with bachelor degree. </p>
-                                <p>Therefore I decided to implement a <i>Generalized Raking</i> algorithm for a weighting without crossing distributions in <i>python</i>. The following lines 
+                                <p>We have conducted a well-thought-of online survey and got the data that will help us answer our research questions. We tried to target all the relevant groups in the population, 
+                                    and yet we see that some groups are underrepresented in our dataset. We would like our findings to be representative for the 
+                                    target population (be it group of our clients, or population of a country). We can achieve this by weighting the data. 
+                                    Do we have too many young respondents? Let’s give them lower weights. Problem solved. </p>
+                                    <p>Typically, we try to weight the data so that we match distributions of multiple characteristics such as age, gender, income, 
+                                        level of education, etc. An algorithm called <i>Iterative Proportional Fitting</i> is often used. This method has, however, 
+                                        a drawback - it often generates very unbalanced weights (meaning that some observations get very low and some very high weights). This problem is discussed
+                                        for example in <a target="_blank" href="https://dev.to/potloc/generalized-raking-for-survey-weighting-2d1d">this great article</a>.</p>
+                                        <p>Generating extremely high and extremely low weights for our respondents is not an outcome we would like to aim for. 
+                                        We were not trying to collect as many opinions as possible only to give some people hundred times higher importance than others.
+                                    </p>
+                                        <p>The above-mentioned article suggests using a <i>Generalized Raking</i> algorithm that generates weights that are as close to 1 as possible. The trick is in 
+                                            utilizing a constrained optimization problem. We try to minimize a specific function of weights while satisfying the constraints that 
+                                            the distributions of selected characteristics in the weighted data have to match the distributions in the target population. The function has its minimum
+                                            in the point where all weights are equal to 1.
+                                        </p>
+                                        <span class="image fit">
+                                            <img src="images/scale.jpg" alt="">
+                                        </span>
+                                        <p>The article proposed a python implementation of this method as well. The approach uses cross-dimensional weighting and requires a user to define a 
+                                            joint probability mass function for the target characteristics. Trying to target multiple characteristics such as age, gender, 
+                                            education would mean we have to define population shares for every possible combination of these characteristics. Matching small 
+                                            number of characteristics can lead to need of defining population shares for hundreds of combinations. This can become infeasible and 
+                                            some information might not be available at all. The proposed algorithm also does not work if any of the combinations is not present in our 
+                                            survey data, which can easily happen.</p>
+
+                                <p>Therefore, I decided to implement a less restrictive version of the generalized raking weighting - 
+                                    the approach where we match the distributions of individual characteristics and leave out the requirement to define and match the 
+                                    shares of all possible combinations. In my practice so far, I always used this type of “less restrictive” weighting anyways. The following lines 
                                 present the ideas behind the algorithm and show complete code.</p>
                                 <p>Let's create a bunch of observations defined by two characteristics - age group and education level, and define target population distributions.</p>
                                 <pre  class="no-line-numbers"><code class="language-python">import numpy as np
@@ -92,21 +100,21 @@ educ_pop = np.array([0.25, 0.25, 0.4, 0.1])
 population = []
 population.append(age_pop*to_weight.shape[0])
 population.append(educ_pop*to_weight.shape[0])</code></pre>
-                                <p>Now we have to define the function we will try to minimize. Remember, we want every single weight to be 
+                                <p>Now we have to define a function we will try to minimize. Remember, we want every single weight to be 
                                     as close to 1 as possible. Our optimization problem can be described with following formula:</p>
-                                    <p align="center">    $ \underset{w}{arg\ min}\ F(w)\ s.t.\ X^Tw = T \\ F(x) = || ( x_1(log(x_1)-1) + 1 \ ,\  x_2(log(x_2)-1) + 1 \ ,\  ...)||$</p>
-                                    <p>where $w$ is the vector of weights, $X$ is a matrix of 0's and 1's and size (number of respondents X number of possible target values) and $T$
-                                    is distribution of these targets in the target population. Function $F$ is a simple linear norm of the vector, where every element of the vector
-                                    is a function of one weight. This function ($x_i(log(x_i)-1) + 1$) has minimum equal to 0 in 1. Minimizing a linear norm of the vector 
+                                    <p align="center">    $ \underset{w}{arg\ min}\ F(w)\ s.t.\ X^Tw = T \\ F(x) = || ( x_1(log(x_1)-1) + 1 \ ,\  x_2(log(x_2)-1) + 1 \ ,\  ...)||,$</p>
+                                    <p>where $w$ is the vector of weights, $X$ is the matrix of 0's and 1's and size (number of respondents X number of possible target values) and $T$
+                                    is the vector of proportions of the targets in the target population. Function $F$ is a simple linear norm of the vector, where every element of the vector
+                                    is a function of one weight. This function ($x_i(log(x_i)-1) + 1$) has a minimum equal to 0, which is only reached if the weight is equal to 1. Minimizing a linear norm of the vector 
                                     corresponds to pushing its elements close to 0, which corresponds to pushing the individual weights to 1. The nummerical optimizer we will
-                                     use requires us to minimize a single value. That requirement is satisfied because we minimize the linear norm (and not the vector elements separately).</p>
-                                    <p> Note that we wrote just one binding constraint but generally we have
-                                as many constraints as we have characteristics we try to match. In our case we would have one constraint for age and one for education (for simplicity
-                                 we don't use tensor algebra here).</p>
+                                     use in <i>python</i> requires us to minimize a single value. That requirement is satisfied because we minimize the linear norm (and not the elements of the vector separately).</p>
+                                    <p> Note that we wrote just one binding constraint, but generally we have
+                                as many constraints as we have characteristics we use to weight the data. In our case we would have one constraint for age and one for education (for simplicity
+                                 we do not use tensor algebra here).</p>
                                  <p>When defining the functions in <i>python</i>, we use
                                 <i><a href="https://numba.pydata.org/">Numba</a></i>, which translates the function to the machine code and thus
                                 improves the overall performance (with survey samples of hundreds observations we are running millions of operations
-                                and thus even small improvements in performance can make a big difference, same as a parallelization of some operations).</p>
+                                and thus even small improvements in performance can make a big difference, same as a parallelization of some of the operations).</p>
                                 <pre  class="no-line-numbers"><code class="language-python">from numba import njit
 
 @njit(fastmath=True)
@@ -128,7 +136,7 @@ def fast_constr(w,x,b):
         s+=(c[i])**2
         
     return math.sqrt(s)        </code></pre>
-                                <p>Now we just need a python function that will run numerical solver and generates weights for us. Note that <i>scipy</i> package in version 1.5
+                                <p>Now we just need a python function that will run numerical solver and generate the weights for us. Note that <i>scipy</i> package in version 1.5
                                     might raise an error during the optimization. Use either version 1.4.1 or versions newer than 1.5.
                                 </p>
                                 <pre  class="no-line-numbers"><code class="language-python">from scipy.optimize import minimize
@@ -231,10 +239,10 @@ array([1.50754192, 0.70123665, 0.4956768 , 1.06891711, 0.45889284,
        0.7012365 , 1.06891707, 0.47344908, 1.06891723, 0.69572005,
        0.37444267, 1.50754178, 1.69883684, 0.47344906, 0.05672965,
        2.9013284 , 0.05672949, 1.6988368 , 0.49567683, 0.69571983])    </code></pre>
-    <p>I hope you will find the algorithm helpful for some of your projects. Feel free to download the full code
+    <p>I hope you will find the algorithm helpful in some of your projects. Feel free to download the full code
     from <a target="_blank" href="https://github.com/palasmi/Weighting-survey-data-generalized-raking">Github</a>. </p>
-    <p>Note: The optimizer can get pretty slow with bigger samples (~ over 1000) and multiple characteristics to match.
-   In such cases, we recommend to split the sample into balanced subsamples, weight them separately, and then
+    <p>Note: The optimizer can get pretty slow with bigger datasets (~ over 1000) and multiple characteristics to match.
+   In such cases, I recommend to split your data into balanced subsets, weight those separately, and then
     average the weights for respondents with same characteristics.</p>
     <p>Image source: Unsplash</p>
 
